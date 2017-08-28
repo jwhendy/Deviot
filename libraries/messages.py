@@ -100,6 +100,7 @@ class MessageQueue(Console):
     start_print() and stop_print() are executed in a new thred to avoid
     block the sublime text UI
     """
+    error_offset = None
 
     def __init__(self, start_header=None, *args):
         super(MessageQueue, self).__init__()
@@ -373,10 +374,13 @@ class MessageQueue(Console):
         
         Hide the phantom when the "x" is pressed
         
-        Arguments:
+        Arguments
             url {str} -- attribute of the link clicked.
         """
         self.hide_phantoms()
+
+    def set_error_offset(self, value):
+        self.error_offset = value + 1
 
     def change_cpp_name(self, text):
         """Ino instead cpp
@@ -404,6 +408,6 @@ class MessageQueue(Console):
             result = search("(.+):([0-9]+):([0-9]+):\s(.+)", text)
             line = int(result.group(2))
             old_line = ":{0}:".format(line)
-            new_line = ":{0}:".format(line - 1)
+            new_line = ":{0}:".format(line - self.error_offset)
             text = text.replace(old_line, new_line)
         return text

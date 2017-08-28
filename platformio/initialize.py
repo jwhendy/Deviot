@@ -33,6 +33,7 @@ class Initialize(ProjectCheck):
         self.dprint = messages.put
         self.derror = messages.print_once
         self.dstop = messages.stop_print
+        self.offset = messages.set_error_offset
 
     def add_board(self):
         """New Board
@@ -107,10 +108,8 @@ class Initialize(ProjectCheck):
 
         if(extension == 'ino'):
             file_path = self.get_file_path()
-            cpp_file = file_path.replace('.ino', '.cpp')
-            
-            copyfile(file_path, cpp_file)
-            self.add_arduino_lib(cpp_file)
+            self.generate_cpp(file_path);
+            self.offset(self.error_offset)
             self.exclude_ino()
 
     def del_cpp_temp(self):

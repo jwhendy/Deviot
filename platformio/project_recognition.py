@@ -29,6 +29,8 @@ import sublime
 
 
 class ProjectRecognition(object):
+    error_offset = None
+
     def __init__(self):
         self.window = sublime.active_window()
         self.view = self.window.active_view()
@@ -360,6 +362,9 @@ class ProjectRecognition(object):
             tmp_path = os.path.join(tmp_path, extra_str)
 
         return tmp_path
+
+    def set_error_offset(self, value):
+        self.error_offset = value
 
 
 class ProjectDetails(ProjectRecognition):

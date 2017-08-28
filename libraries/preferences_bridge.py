@@ -292,25 +292,44 @@ class PreferencesBridge(PioBridge):
         with open(ini_path, 'w') as configfile:
             config.write(configfile)
 
-    def add_arduino_lib(self, path):
-        """Arduino Library
-        
-        Adds "#include <Arduino.h>"" at the begining of the given file
-        
-        Arguments:
-            path {str} -- path of the file where the header will be included
+    def generate_cpp(self, path):
         """
-        sketch = None
+        Generate a cpp file with prototypes to avoid errors.
+        it will also include the Arduino.h library
+        """
+        sketch = ''
+        prototypes = []
+        cpp_file = path.replace('.ino', '.cpp')
 
+        d_type = ['void', 'boolean', 'char', 'unsigned char',
+                  'byte', 'int', 'unsigned int', 'word', 'long',
+                  'unsigned long', 'short', 'float', 'double',
+                  'string', 'String', 'array']
+
+        # read ino file
         with open(path, "r") as file:
-            sketch = file.read()
+            for line in file:
+                
+                segments = line.split(' ')
+                if(segments[0] in d_type):
+                    # avoid setup and loop functions
+                    if('setup' not in line and 'loop' not in line):
+                        function = line.split('()')[0]
+                        prototypes.append('{0}();'.format(function))
 
-        with open(path, "w+") as file:
+                sketch = sketch + line
+
+        self.set_error_offset(len(prototypes))
+        prototypes = '\n'.join(prototypes) + '\n'
+
+        # write cpp file
+        with open(cpp_file, "w+") as file:
+
             include = '#include <Arduino.h>\n'
-            
             if(include not in sketch):
-                sketch = include + sketch
-                file.write(sketch)
+                sketch = include + prototypes + sketch
+            
+            file.write(sketch)
 
     def overwrite_baudrate(self):
         """Add new speed
