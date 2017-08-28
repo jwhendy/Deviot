@@ -179,51 +179,48 @@ class PreferencesBridge(PioBridge):
         programmer = get_setting('programmer_id', None)
         ini_path = self.get_ini_path()
 
-        # open platformio.ini and get the environment
-        config = ConfigParser()
-        ini_file = config.read(ini_path)
+        flags = {
+            'avr':          {"upload_protocol": "stk500v1",
+                             "upload_flags": "-P$UPLOAD_PORT",
+                             "upload_port": self.port_id},
+            'avrmkii':      {"upload_protocol": "stk500v2",
+                             "upload_flags": "-Pusb"},
+            'usbtiny':      {"upload_protocol": "usbtiny"},
+            'arduinoisp':   {"upload_protocol": "arduinoisp"},
+            'usbasp':       {"upload_protocol": "usbasp",
+                             "upload_flags": "-Pusb"},
+            'parallel':     {"upload_protocol": "dapa",
+                             "upload_flags": "-F"},
+            'arduinoasisp': {"upload_protocol": "stk500v1",
+                             "upload_flags": "-P$UPLOAD_PORT -b$UPLOAD_SPEED",
+                             "upload_speed": "19200",
+                             "upload_port": self.port_id}
+        }
 
-        environment = 'env:' + self.board_id
+        # open platformio.ini and get the environment
+        Config = ConfigParser()
+        ini_file = Config.read(ini_path)
+        environment = 'env:{0}'.format(self.board_id)
 
         # stop if environment wasn't initialized yet
-        if(not config.has_section(environment)):
+        if(environment not in ini_file):
             return
 
-        options = ['upload_protocol', 'upload_flags', 'upload_speed', 'upload_port']
+        env = ini_file[environment]
+        rm = ['upload_protocol', 'upload_flags', 'upload_speed', 'upload_port']
 
         # remove previous configuration
-        if(config.has_option(environment, options[0])):
-            for option in options:
-                config.remove_option(environment, option)
+        if(rm[0] in env):
+            for line in rm:
+                if(line in env):
+                    env.pop(line)
 
         # add programmer option if it was selected
         if(programmer):
-            if(programmer == 'avr'):
-                config.set(environment, 'upload_protocol', 'stk500v1')
-                config.set(environment, 'upload_flags', '-P$UPLOAD_PORT')
-                config.set(environment, 'upload_port', self.port_id)
-            elif(programmer == 'avrmkii'):
-                config.set(environment, 'upload_protocol', 'stk500v2')
-                config.set(environment, 'upload_flags', '-Pusb')
-            elif(programmer == 'usbtiny'):
-                config.set(environment, 'upload_protocol', 'usbtiny')
-            elif(programmer == 'arduinoisp'):
-                config.set(environment, 'upload_protocol', 'arduinoisp')
-            elif(programmer == 'usbasp'):
-                config.set(environment, 'upload_protocol', 'usbasp')
-                config.set(environment, 'upload_flags', '-Pusb') 
-            elif(programmer == 'parallel'):
-                config.set(environment, 'upload_protocol', 'dapa')
-                config.set(environment, 'upload_flags', '-F')
-            elif(programmer == 'arduinoasisp'):
-                config.set(environment, 'upload_protocol', 'stk500v1')
-                config.set(environment, 'upload_flags', '-P$UPLOAD_PORT -b$UPLOAD_SPEED')
-                config.set(environment, 'upload_speed', '19200')
-                config.set(environment, 'upload_port', self.port_id)
+            env.merge(flags[programmer])
 
         # save in file
-        with open(ini_path, 'w') as configfile:
-            config.write(configfile)
+        ini_file.write()
 
     def add_extra_library(self):
         """Add extra library folder
@@ -234,27 +231,86 @@ class PreferencesBridge(PioBridge):
         The path of the folder must be set from the option 
         `add extra folder` in the library option menu
         """
-        lib_flag = 'lib_extra_dirs'
         ini_path = self.get_ini_path()
         extra = get_setting('extra_library', None)
 
-        config = ConfigParser()
-        ini_file = config.read(ini_path)
+        Config = ConfigParser()
+        ini_file = Config.read(ini_path)
+        environment = 'env:{0}'.format(self.board_id)
 
-        environment = 'env:' + self.board_id
+        if(environment not in ini_file):
+            return
+
+        env = ini_file[environment]
+
+        if(not extra):
+            if('lib_extra_dirs' in env):
+                env.pop('lib_extra_dirs')
+
+        if(extra):
+            extra_option = {'lib_extra_dirs': extra}
+            env.merge(extra_option)
+
+        ini_file.write()
+
+    def exclude_ino(self, remove=False):
+        """Add extra library folder
+        
+        Adds an extra folder where to search for user libraries,
+        this option will run before compile the code.
+
+        The path of the folder must be set from the option 
+        `add extra folder` in the library option menu
+        """
+        file_path = self.get_file_path()
+        ini_path = self.get_ini_path()
+        
+        cpp_name = file_path.replace('.ino', '.cpp')
+        filters = '-<{0}> -<{0}.*> +<{1}>'.format(file_path, cpp_name)
+
+        config = ConfigParser()
+        config.read(ini_path)
+
+        environment = 'env:{0}'.format(self.board_id)
 
         if(not config.has_section(environment)):
             return
 
-        # remove previous configuration
-        if(config.has_option(environment, lib_flag)):
-            config.remove_option(environment, lib_flag)
-
-        if(extra):
-            config.set(environment, lib_flag, extra)
+        if(remove):
+            if(config.has_option(environment, 'src_filter')):
+                src_filter = config.get(environment, 'src_filter')
+                if(src_filter == filters):
+                    config.remove_option(environment, 'src_filter')
+                else:
+                    new_filter = src_filter.replace(filters, '')
+                    config.set(environment, 'src_filter', new_filter)                    
+        else:
+            if(config.has_option(environment, 'src_filter')):
+                filters = config.get(environment, 'src_filter') + ' ' + filters
+            config.set(environment, 'src_filter', filters)
 
         with open(ini_path, 'w') as configfile:
             config.write(configfile)
+
+    def add_arduino_lib(self, path):
+        """Arduino Library
+        
+        Adds "#include <Arduino.h>"" at the begining of the given file
+        
+        Arguments:
+            path {str} -- path of the file where the header will be included
+        """
+        sketch = None
+
+        with open(path, "r") as file:
+            sketch = file.read()
+
+        with open(path, "w+") as file:
+            include = '#include <Arduino.h>\n'
+            
+            if(include not in sketch):
+                sketch = include + sketch
+                file.write(sketch)
 
     def overwrite_baudrate(self):
         """Add new speed
@@ -263,27 +319,27 @@ class PreferencesBridge(PioBridge):
         flag is add into the platformio.ini file with
         the new speed, it will overwrite the default speed
         """
-        baud_flag = 'upload_speed'
         ini_path = self.get_ini_path()
         baudrate = get_setting('upload_baudrate', None)
 
-        config = ConfigParser()
-        ini_file = config.read(ini_path)
+        Config = ConfigParser()
+        ini_file = Config.read(ini_path)
+        environment = 'env:{0}'.format(self.board_id)
 
-        environment = 'env:' + self.board_id
-
-        if(not config.has_section(environment)):
+        if(environment not in ini_file):
             return
 
-        # remove previous configuration
-        if(config.has_option(environment, baud_flag)):
-            config.remove_option(environment, baud_flag)
+        env = ini_file[environment]
+
+        if(not baudrate):
+            if('upload_speed' in env):
+                env.pop('upload_speed')
 
         if(baudrate):
-            config.set(environment, baud_flag, baudrate)
+            extra_option = {'upload_speed': baudrate}
+            env.merge(extra_option)
 
-        with open(ini_path, 'w') as configfile:
-            config.write(configfile)
+        ini_file.write()
 
     def get_mdns_services(self):
         """mDNS services

@@ -75,6 +75,8 @@ class Upload(Initialize):
         # add src_dir flag if it's neccesary
         self.override_src()
 
+        self.make_cpp_temp()
+
         out = self.run_command(cmd)
 
         self.after_complete()
