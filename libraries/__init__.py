@@ -1,4 +1,4 @@
-VERSION = (2, 1, 6, 1)
+VERSION = (2, 1, 5)
 __version__ = ".".join([str(s) for s in VERSION[:3]])
 if(len(VERSION) > 3):
     __version__ +=  '.dev.' + VERSION[3]
